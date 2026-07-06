@@ -43,4 +43,5 @@ Android.
 | Repo | What it is |
 |---|---|
 | [siloserver.org](https://github.com/Silo-Server/siloserver.org) | The project website. |
+| [silo-push-relay](https://github.com/Silo-Server/silo-push-relay) | The Silo Push Notifiation relay service. |
 | [silo-themes](https://github.com/Silo-Server/silo-themes) | Community theme catalog. |
