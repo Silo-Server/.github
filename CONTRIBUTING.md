@@ -67,9 +67,20 @@ skipped, failed, or ran somewhere other than where you say it did.
 > the contributor blocked. Bug reports must come from a real reproduction with
 > raw logs.
 
-The [AI-assisted contribution policy](https://github.com/Silo-Server/silo-server/blob/main/docs/ai-contributions.md)
-defines the disclosure block, evidence standard, and enforcement. "No AI used"
-is a valid disclosure; leaving it out is not.
+Use this organization-wide disclosure block:
+
+```md
+## AI Disclosure
+
+- Harness: exact agent harness or application, or "none"
+- Tool(s): exact tool name(s), or "none"
+- Model(s): exact model identifier(s) reported by each tool, or "n/a"
+- Involvement: Fully AI-generated, human verified | AI-assisted | Human-written, AI-reviewed | No AI used
+- Adversarial review: scope, method, findings, and resolutions, or "n/a" when this change does not require independent or adversarial review
+```
+
+Repository-specific policies may add evidence or validation requirements. "No
+AI used" is a valid disclosure; leaving the disclosure out is not.
 
 ## Open the pull request
 
