@@ -7,7 +7,7 @@ handles direct play, remuxing, and hardware-accelerated transcoding, and offers
 a Jellyfin/Emby-compatible API for clients such as Findroid and Infuse,
 alongside first-party native apps for Apple and Android. Client coverage varies.
 
-[Website](https://siloserver.org) · [Server & docs](https://github.com/Silo-Server/silo-server) · [Contributing](https://github.com/Silo-Server/.github/blob/main/CONTRIBUTING.md)
+[Website](https://siloserver.org) · [Server & docs](https://github.com/Silo-Server/silo-server) · [Contributing](https://github.com/Silo-Server/.github/blob/main/CONTRIBUTING.md) · [Brand & trademark](https://siloserver.org/brand) · [Discord](https://discord.gg/siloserver)
 
 ---
 
