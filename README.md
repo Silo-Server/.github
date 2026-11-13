@@ -51,26 +51,37 @@ Contract:
 - Trigger: a `push` of a tag `vMAJOR.MINOR.PATCH` (optionally `-PRERELEASE`).
   The tagged commit must be on the first-parent history of the plugin
   repository's `main`, its `manifest.json` `version` must equal the tag
-  without the `v`, and it must be the commit that changed that version
-  relative to its first parent. Only one commit per version is releasable.
-  To release, merge a pull request that bumps `manifest.json`, then tag the
-  commit on `main` that bumped it: the squash commit, or the merge commit for
-  a merge-commit PR.
+  without the `v`, and that version must be strictly greater, by semver
+  precedence (`1.2.0-rc.1` < `1.2.0`), than its first parent's (a root commit
+  or a parent without `manifest.json` passes). No later first-parent commit on
+  `main` may set a lower version; a reverted bump is not releasable. Only one
+  commit per version is releasable. To release, merge a pull request that
+  bumps `manifest.json`, then tag the commit on `main` that bumped it: the
+  squash commit, or the merge commit for a merge-commit PR.
 - Prereleases (`vX.Y.Z-rc.1`) publish a GitHub prerelease and do not notify
   the catalog.
 - Permissions: the calling job grants `contents: write`, `id-token: write`,
   and `attestations: write`. The workflow narrows them per job; only the
-  signing job, which runs no plugin code, can request a signing token.
+  signing job, which runs no plugin code and downloads nothing, can request a
+  signing token.
 - Input `platforms` (optional): comma-separated `GOOS/GOARCH` pairs. Default
   `linux/amd64,linux/arm64,darwin/arm64`.
 - Secret `dispatch_token` (optional): when set, a non-prerelease sends a
   `plugin_release_published` `repository_dispatch` to `Silo-Server/silo-plugins`
   with `{"repo": "<owner>/<name>", "tag": "<tag>"}`. When unset, it skips the
-  dispatch.
-- Build: the main package at the repository root, with Go from `go.mod`,
+  dispatch. The dispatch is its own job after the release, so a failed
+  dispatch can be re-run alone.
+- Build: one job builds every platform from the main package at the
+  repository root, with Go from `go.mod`,
   `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=<version>"`,
   cross-compiled on Ubuntu. A `silo-plugin-sdk` replace, or a replace to an
   absolute or `../` path, in `go.mod` fails the build.
+- Integrity between jobs: the build job returns the binaries' `sha256sum`
+  lines as a job output, and the signing job attests exactly those digests.
+  The release job publishes the downloaded binaries only after
+  `sha256sum --check` against that output and `gh attestation verify`
+  against the bundle, so a replaced artifact fails before anything is
+  published.
 - Release assets: `plugin-<os>-<arch>` for each platform, `checksums.txt`
   (`sha256sum` format, one line per binary), and `plugin.sigstore.json`, a
   single Sigstore bundle from GitHub artifact attestations that lists every
