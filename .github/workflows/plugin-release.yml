@@ -55,7 +55,10 @@ jobs:
           LC_ALL: C
         run: |
           set -euo pipefail
-          semver_re='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+          # A prerelease identifier is a number without leading zeros, or
+          # alphanumerics and hyphens with at least one non-digit.
+          pre_id='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+          semver_re="^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(${pre_id}(\.${pre_id})*))?\$"
 
           # semver_cmp A B prints -1, 0, or 1 by semver 2.0.0 precedence
           # (1.2.0-rc.1 < 1.2.0) and returns 2 when either is not semver.
