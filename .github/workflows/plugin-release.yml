@@ -1,0 +1,374 @@
+# Builds, signs, and releases a Silo-Server plugin. Plugin repositories call
+# it from a tag push; see "Shared workflows" in this repository's README.md
+# for the caller contract. Callers must reference it at @main: the Sigstore
+# certificate records that ref, and Silo servers accept only
+# .../plugin-release.yml@refs/heads/main.
+name: Plugin release
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: Comma-separated GOOS/GOARCH pairs to build.
+        type: string
+        required: false
+        default: linux/amd64,linux/arm64,darwin/arm64
+    secrets:
+      dispatch_token:
+        description: Token that may send repository_dispatch to Silo-Server/silo-plugins. The catalog dispatch is skipped when unset.
+        required: false
+
+permissions: {}
+
+jobs:
+  guard:
+    name: Check tag, branch, and manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      matrix: ${{ steps.platforms.outputs.matrix }}
+      binaries: ${{ steps.platforms.outputs.binaries }}
+    steps:
+      - name: Check out the tagged commit with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check tag, ancestry, and manifest version
+        id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "push" ]; then
+            echo "::error::Plugin releases run only from a tag push (got event '${EVENT_NAME}')."
+            exit 1
+          fi
+          semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'
+          tag="${REF#refs/tags/}"
+          if [ "$tag" = "$REF" ] || ! [[ "$tag" =~ $semver ]]; then
+            echo "::error::Ref '${REF}' is not refs/tags/vMAJOR.MINOR.PATCH[-PRERELEASE]."
+            exit 1
+          fi
+          version="${tag#v}"
+
+          tag_commit="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+          if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag ${tag} points at ${tag_commit}, but this run is for ${GITHUB_SHA}."
+            exit 1
+          fi
+          git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null || {
+            echo "::error::origin/main was not fetched."
+            exit 1
+          }
+          # Only commits that landed on main itself (its first-parent chain)
+          # are releasable; commits inside a merged branch are not.
+          # grep -c reads all of rev-list's output; grep -q would exit early
+          # and fail the pipeline under pipefail on a long history.
+          if ! git rev-list --first-parent refs/remotes/origin/main | grep -cxF "$GITHUB_SHA" >/dev/null; then
+            echo "::error::Tag ${tag} (${GITHUB_SHA}) is not a commit on main's first-parent history. Tag the commit on main that bumped manifest.json."
+            exit 1
+          fi
+
+          manifest_version="$(git show "${GITHUB_SHA}:manifest.json" | jq -er '.version')"
+          if [ "$manifest_version" != "$version" ]; then
+            echo "::error file=manifest.json::manifest.json version is '${manifest_version}', but the tag is ${tag}."
+            exit 1
+          fi
+
+          # Exactly one commit per version is releasable: the one that changed
+          # manifest.json .version relative to its first parent. A root commit,
+          # or a parent without manifest.json, counts as a change.
+          parent_version=""
+          if git rev-parse --verify --quiet "${GITHUB_SHA}^1" >/dev/null; then
+            parent_version="$(git show "${GITHUB_SHA}^1:manifest.json" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
+          fi
+          if [ "$parent_version" = "$version" ]; then
+            echo "::error::${GITHUB_SHA} did not change manifest.json version (its first parent is already ${version}). Tag the commit on main that bumped it."
+            exit 1
+          fi
+
+          # A bump that main later reverted is not releasable: no later
+          # first-parent commit on main may lower MAJOR.MINOR.PATCH.
+          core="${version%%-*}"
+          while read -r later; do
+            later_version="$(git show "${later}:manifest.json" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
+            later_core="${later_version%%-*}"
+            lowest="$(printf '%s\n%s\n' "$core" "$later_core" | sort -V | head -n1)"
+            if [ -z "$later_core" ] || { [ "$lowest" = "$later_core" ] && [ "$later_core" != "$core" ]; }; then
+              echo "::error::main later moved manifest.json version from ${version} to '${later_version}' (${later}); the ${version} bump was reverted. Release a new version instead."
+              exit 1
+            fi
+          done < <(git rev-list --first-parent "${GITHUB_SHA}..refs/remotes/origin/main" -- manifest.json)
+
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Parse platforms
+        id: platforms
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          include='[]'
+          names=()
+          IFS=',' read -ra entries <<< "$PLATFORMS"
+          for entry in "${entries[@]}"; do
+            entry="${entry//[[:space:]]/}"
+            [ -n "$entry" ] || continue
+            if ! [[ "$entry" =~ ^([a-z0-9]+)/([a-z0-9]+)$ ]]; then
+              echo "::error::Platform '${entry}' is not GOOS/GOARCH."
+              exit 1
+            fi
+            name="plugin-${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+            if [[ " ${names[*]} " == *" ${name} "* ]]; then
+              continue
+            fi
+            names+=("$name")
+            include="$(jq -c --arg goos "${BASH_REMATCH[1]}" --arg goarch "${BASH_REMATCH[2]}" --arg name "$name" \
+              '. + [{goos: $goos, goarch: $goarch, name: $name}]' <<< "$include")"
+          done
+          if [ "${#names[@]}" -eq 0 ]; then
+            echo "::error::The platforms input lists no platforms."
+            exit 1
+          fi
+          echo "matrix={\"include\":${include}}" >> "$GITHUB_OUTPUT"
+          echo "binaries=${names[*]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.guard.outputs.matrix) }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # No module or build cache: a release must not consume cache entries
+      # that other workflow runs in the repository could have written.
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Reject silo-plugin-sdk and machine-local replaces
+        run: |
+          set -euo pipefail
+          bad="$(go mod edit -json | jq -r '
+            .Replace // [] | .[]
+            | select(.Old.Path == "github.com/Silo-Server/silo-plugin-sdk"
+                     or (.New.Path | startswith("/"))
+                     or (.New.Path | startswith("../")))
+            | "\(.Old.Path) => \(.New.Path) \(.New.Version // "")"')"
+          if [ -n "$bad" ]; then
+            echo "::error file=go.mod::go.mod has replace directives a release cannot use; use a local go.work instead:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          BINARY: ${{ matrix.name }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          CGO_ENABLED: "0"
+          GOWORK: "off"
+          GOFLAGS: -mod=readonly
+          GOPROXY: direct
+          GOPRIVATE: github.com/Silo-Server/*
+          GONOSUMDB: github.com/Silo-Server/*
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "dist/${BINARY}" .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 5
+
+  # Holds the signing permissions. It runs no repository code and checks
+  # nothing out; it only signs the binaries the build jobs uploaded.
+  attest:
+    name: Sign binaries
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: plugin-*
+          merge-multiple: true
+          path: dist
+
+      - name: Check the binary set
+        env:
+          BINARIES: ${{ needs.guard.outputs.binaries }}
+        run: |
+          set -euo pipefail
+          expected="$(tr ' ' '\n' <<< "$BINARIES" | sort)"
+          actual="$(find dist -mindepth 1 -maxdepth 1 -type f -size +0 -printf '%f\n' | sort)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::Downloaded binaries do not match the platform list."
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual"
+            exit 1
+          fi
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/plugin-*
+
+      - name: Save the bundle as plugin.sigstore.json
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          mkdir -p bundle
+          cp "$BUNDLE_PATH" bundle/plugin.sigstore.json
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sigstore-bundle
+          path: bundle/plugin.sigstore.json
+          if-no-files-found: error
+          retention-days: 5
+
+  release:
+    name: Publish release
+    needs: [guard, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: plugin-*
+          merge-multiple: true
+          path: release
+
+      - name: Download bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sigstore-bundle
+          path: bundle
+
+      - name: Write checksums.txt
+        env:
+          BINARIES: ${{ needs.guard.outputs.binaries }}
+        run: |
+          set -euo pipefail
+          expected="$(tr ' ' '\n' <<< "$BINARIES" | sort)"
+          actual="$(find release -mindepth 1 -maxdepth 1 -type f -size +0 -printf '%f\n' | sort)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::Downloaded binaries do not match the platform list."
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual"
+            exit 1
+          fi
+          cp bundle/plugin.sigstore.json release/plugin.sigstore.json
+          cd release
+          # shellcheck disable=SC2086 # BINARIES is a validated, space-separated list.
+          sha256sum $expected > checksums.txt
+          cat checksums.txt
+
+      # Checks the bundle against the identity Silo servers pin, so a release
+      # that servers would refuse (for example one called at a ref other than
+      # @main) is never published.
+      - name: Verify the bundle against the pinned identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BINARIES: ${{ needs.guard.outputs.binaries }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          SIGNER: https://github.com/Silo-Server/.github/.github/workflows/plugin-release.yml@refs/heads/main
+        run: |
+          set -euo pipefail
+          for binary in $BINARIES; do
+            gh attestation verify "release/${binary}" \
+              --bundle release/plugin.sigstore.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --cert-identity "$SIGNER" \
+              --cert-oidc-issuer https://token.actions.githubusercontent.com \
+              --source-ref "refs/tags/${TAG}" \
+              --deny-self-hosted-runners
+          done
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BINARIES: ${{ needs.guard.outputs.binaries }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          files=()
+          for binary in $BINARIES; do
+            files+=("release/${binary}")
+          done
+          files+=(release/checksums.txt release/plugin.sigstore.json)
+          flags=(--repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "${flags[@]}" "${files[@]}"
+
+      - name: Notify the silo-plugins catalog
+        env:
+          DISPATCH_TOKEN: ${{ secrets.dispatch_token }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "$PRERELEASE" = "true" ]; then
+            echo "${TAG} is a prerelease; skipping the catalog dispatch."
+            exit 0
+          fi
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "dispatch_token is not set; skipping the catalog dispatch."
+            exit 0
+          fi
+          payload="$(jq -nc --arg repo "$GITHUB_REPOSITORY" --arg tag "$TAG" \
+            '{event_type: "plugin_release_published", client_payload: {repo: $repo, tag: $tag}}')"
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/Silo-Server/silo-plugins/dispatches \
+            -d "$payload"
