@@ -18,9 +18,14 @@ on:
         type: string
         required: false
         default: linux/amd64,linux/arm64,darwin/arm64
+      catalog_repository:
+        description: Plugin catalog to notify after a release, Silo-Server/silo-plugins or Silo-Community/silo-plugins.
+        type: string
+        required: false
+        default: Silo-Server/silo-plugins
     secrets:
       dispatch_token:
-        description: Token that may send repository_dispatch to Silo-Server/silo-plugins. The catalog dispatch is skipped when unset.
+        description: Token that may send repository_dispatch to the catalog repository. The catalog dispatch is skipped when unset.
         required: false
 
 permissions: {}
@@ -38,7 +43,25 @@ jobs:
       prerelease: ${{ steps.check.outputs.prerelease }}
       platforms: ${{ steps.platforms.outputs.platforms }}
       binaries: ${{ steps.platforms.outputs.binaries }}
+      catalog: ${{ steps.catalog.outputs.catalog }}
     steps:
+      # Checked first, so a mistyped catalog fails before anything is built
+      # or published. Only the two Silo catalogs are accepted.
+      - name: Check the catalog repository
+        id: catalog
+        env:
+          CATALOG: ${{ inputs.catalog_repository }}
+        run: |
+          set -euo pipefail
+          case "$CATALOG" in
+            Silo-Server/silo-plugins | Silo-Community/silo-plugins) ;;
+            *)
+              echo "::error::catalog_repository '${CATALOG}' is not Silo-Server/silo-plugins or Silo-Community/silo-plugins."
+              exit 1
+              ;;
+          esac
+          echo "catalog=${CATALOG}" >> "$GITHUB_OUTPUT"
+
       - name: Check out the tagged commit with full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -434,6 +457,7 @@ jobs:
   # Separate from release so a failed dispatch can be re-run on its own;
   # re-running release fails once the release exists.
   dispatch:
+    # Plugin repositories' release notes name this job; keep the name.
     name: Notify the silo-plugins catalog
     needs: [guard, release]
     runs-on: ubuntu-latest
@@ -445,6 +469,7 @@ jobs:
           DISPATCH_TOKEN: ${{ secrets.dispatch_token }}
           TAG: ${{ needs.guard.outputs.tag }}
           PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+          CATALOG: ${{ needs.guard.outputs.catalog }}
         run: |
           set -euo pipefail
           if [ "$PRERELEASE" = "true" ]; then
@@ -462,5 +487,5 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/Silo-Server/silo-plugins/dispatches \
+            "https://api.github.com/repos/${CATALOG}/dispatches" \
             -d "$payload"

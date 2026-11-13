@@ -66,8 +66,13 @@ Contract:
   signing token.
 - Input `platforms` (optional): comma-separated `GOOS/GOARCH` pairs. Default
   `linux/amd64,linux/arm64,darwin/arm64`.
+- Input `catalog_repository` (optional): the catalog to notify,
+  `Silo-Server/silo-plugins` (the default) or `Silo-Community/silo-plugins`.
+  Any other value fails the run before anything is built. An approved
+  community plugin passes `catalog_repository: Silo-Community/silo-plugins`
+  under `with:`.
 - Secret `dispatch_token` (optional): when set, a non-prerelease sends a
-  `plugin_release_published` `repository_dispatch` to `Silo-Server/silo-plugins`
+  `plugin_release_published` `repository_dispatch` to the catalog repository
   with `{"repo": "<owner>/<name>", "tag": "<tag>"}`. When unset, it skips the
   dispatch. The dispatch is its own job after the release, so a failed
   dispatch can be re-run alone.
