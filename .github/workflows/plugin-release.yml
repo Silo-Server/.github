@@ -17,7 +17,7 @@ on:
         description: Comma-separated GOOS/GOARCH pairs to build.
         type: string
         required: false
-        default: linux/amd64,linux/arm64,darwin/arm64
+        default: linux/amd64,linux/arm64,darwin/arm64,freebsd/amd64,freebsd/arm64
       catalog_repository:
         description: Plugin catalog to notify after a release, Silo-Server/silo-plugins or Silo-Community/silo-plugins.
         type: string

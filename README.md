@@ -65,7 +65,9 @@ Contract:
   signing job, which runs no plugin code and downloads nothing, can request a
   signing token.
 - Input `platforms` (optional): comma-separated `GOOS/GOARCH` pairs. Default
-  `linux/amd64,linux/arm64,darwin/arm64`.
+  `linux/amd64,linux/arm64,darwin/arm64,freebsd/amd64,freebsd/arm64`. A plugin
+  that cannot build for one of these sets its own list, which should match
+  `supported_platforms` in its `manifest.json`.
 - Input `catalog_repository` (optional): the catalog to notify,
   `Silo-Server/silo-plugins` (the default) or `Silo-Community/silo-plugins`.
   Any other value fails the run before anything is built. An approved
