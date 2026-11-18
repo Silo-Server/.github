@@ -5,7 +5,7 @@
 Silo is an open-source media server with a Go backend and a React web UI. It
 handles direct play, remuxing, and hardware-accelerated transcoding, and offers
 a Jellyfin/Emby-compatible API for clients such as Findroid and Infuse,
-alongside first-party native apps for Apple and Android. Client coverage varies.
+alongside first-party native apps for Apple, Android, and Roku. Client coverage varies.
 
 [Website](https://siloserver.org) · [Server & docs](https://github.com/Silo-Server/silo-server) · [Contributing](https://github.com/Silo-Server/.github/blob/main/CONTRIBUTING.md) · [Brand & trademark](https://siloserver.org/brand) · [Discord](https://discord.gg/siloserver)
 
@@ -15,7 +15,7 @@ alongside first-party native apps for Apple and Android. Client coverage varies.
 
 - **Modern infra** — Go + PostgreSQL + Redis, with a documented Docker Compose deployment.
 - **Plays your media** — direct play, remux, and hardware-accelerated transcoding via FFmpeg.
-- **Jellyfin-compatible** — built-in compatibility layer, plus first-party native apps for Apple and Android.
+- **Jellyfin-compatible** — built-in compatibility layer, plus first-party native apps for Apple, Android, and Roku.
 - **Extensible** — a public plugin SDK with protobuf contracts for metadata providers and more.
 
 ## Project map
@@ -32,6 +32,7 @@ alongside first-party native apps for Apple and Android. Client coverage varies.
 |---|---|
 | [silo-apple](https://github.com/Silo-Server/silo-apple) | iOS, tvOS, macOS (Swift) |
 | [silo-android](https://github.com/Silo-Server/silo-android) | Android phone & Android TV (Kotlin) |
+| [silo-roku](https://github.com/Silo-Server/silo-roku) | Roku (BrightScript, pre-release) |
 
 ### Plugins
 
@@ -39,14 +40,19 @@ alongside first-party native apps for Apple and Android. Client coverage varies.
 |---|---|
 | [silo-plugin-sdk](https://github.com/Silo-Server/silo-plugin-sdk) | Public Go SDK + protobuf contracts for building plugins. |
 | [silo-plugins](https://github.com/Silo-Server/silo-plugins) | Catalog metadata and release helpers for first-party plugins. |
+| [silo-plugin-auth-ldap](https://github.com/Silo-Server/silo-plugin-auth-ldap) | Sign-in against an LDAP directory. |
+| [silo-plugin-auth-oidc](https://github.com/Silo-Server/silo-plugin-auth-oidc) | Sign-in through an OpenID Connect provider. |
 | [silo-plugin-autoscan-arr](https://github.com/Silo-Server/silo-plugin-autoscan-arr) | Targeted rescans from Sonarr and Radarr history. |
 | [silo-plugin-markers-theintrodb](https://github.com/Silo-Server/silo-plugin-markers-theintrodb) | Playback markers from TheIntroDB. |
 | [silo-plugin-metadata-audiobook](https://github.com/Silo-Server/silo-plugin-metadata-audiobook) | Metadata and artwork for audiobook libraries. |
 | [silo-plugin-metadata-ebook](https://github.com/Silo-Server/silo-plugin-metadata-ebook) | Metadata and artwork for ebook libraries. |
 | [silo-plugin-metadata-manga](https://github.com/Silo-Server/silo-plugin-metadata-manga) | Metadata and artwork for manga libraries. |
+| [silo-plugin-metadata-mdblist](https://github.com/Silo-Server/silo-plugin-metadata-mdblist) | Ratings and age ratings from MDBList. |
 | [silo-plugin-metadata-tmdb](https://github.com/Silo-Server/silo-plugin-metadata-tmdb) | Metadata from The Movie Database (TMDB). |
 | [silo-plugin-metadata-tvdb](https://github.com/Silo-Server/silo-plugin-metadata-tvdb) | Metadata from TheTVDB. |
 | [silo-plugin-watchprovider-floppy](https://github.com/Silo-Server/silo-plugin-watchprovider-floppy) | Watch history and progress sync with Floppy. |
+| [silo-plugin-watchprovider-mdblist](https://github.com/Silo-Server/silo-plugin-watchprovider-mdblist) | Watch history, watchlist, and ratings sync with MDBList. |
+| [silo-plugin-watchprovider-simkl](https://github.com/Silo-Server/silo-plugin-watchprovider-simkl) | Watch history and ratings sync with Simkl. |
 
 ### More
 
@@ -54,5 +60,6 @@ alongside first-party native apps for Apple and Android. Client coverage varies.
 |---|---|
 | [siloserver.org](https://github.com/Silo-Server/siloserver.org) | The project website. |
 | [silo-push-relay](https://github.com/Silo-Server/silo-push-relay) | Privacy-preserving push delivery for the Silo apps. |
-| [silo-themes](https://github.com/Silo-Server/silo-themes) | Community theme catalog. |
+| [silo-translations](https://github.com/Silo-Server/silo-translations) | Shared interface translations for every Silo client. |
+| [silo-troubleshooting-skill](https://github.com/Silo-Server/silo-troubleshooting-skill) | Lets Claude Code or Codex help diagnose and fix a Silo server. |
 | [unraid-templates](https://github.com/Silo-Server/unraid-templates) | Official Unraid Community Applications templates. |
