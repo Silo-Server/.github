@@ -10,8 +10,9 @@ external contributors alike.
 > [!IMPORTANT]
 > Open an issue before implementing features, API or behavior changes, schema
 > changes, large refactors, or anything else that changes product scope.
-> Documentation, typo fixes, and narrow bug fixes can go straight to a pull
-> request.
+> Documentation, typo fixes, and narrow bug fixes in a code repository can go
+> straight to a pull request. Changes to the docs on siloserver.org start with
+> a docs issue; see [Docs on siloserver.org](#docs-on-siloserverorg).
 
 Silo is pre-1.0 and moves quickly. Coordinating first avoids duplicate work,
 conflicts with changes already in flight, and proposals outside scope. Start in
@@ -34,6 +35,16 @@ Use the issue tracker for the repository that owns the problem. Describe what
 you observed before any root-cause theory, and paste raw logs rather than a
 summary. Redact credentials, tokens, personal data, and private media details,
 mark each redaction, and leave the rest untouched.
+
+## Docs on siloserver.org
+
+To report docs on [siloserver.org](https://siloserver.org/docs) that are wrong,
+missing, or out of date, open a docs issue in
+[`siloserver.org`](https://github.com/Silo-Server/siloserver.org) instead of a
+pull request. Select **Suggest a change** at the bottom of the page, which
+fills in the page for you, or use the
+[Suggest a docs change](https://github.com/Silo-Server/siloserver.org/issues/new?template=docs.yml) form. Only collaborators open pull requests in
+that repository.
 
 ## Prepare a focused change
 
