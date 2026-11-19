@@ -11,8 +11,9 @@ external contributors alike.
 > Open an issue before implementing features, API or behavior changes, schema
 > changes, large refactors, or anything else that changes product scope.
 > Documentation, typo fixes, and narrow bug fixes in a code repository can go
-> straight to a pull request. Changes to the docs on siloserver.org start with
-> a docs issue; see [Docs on siloserver.org](#docs-on-siloserverorg).
+> straight to a pull request. Changes to the docs on siloserver.org always go
+> through an issue, never a pull request; see
+> [Docs on siloserver.org](#docs-on-siloserverorg).
 
 Silo is pre-1.0 and moves quickly. Coordinating first avoids duplicate work,
 conflicts with changes already in flight, and proposals outside scope. Start in
@@ -43,8 +44,8 @@ missing, or out of date, open a docs issue in
 [`siloserver.org`](https://github.com/Silo-Server/siloserver.org) instead of a
 pull request. Select **Suggest a change** at the bottom of the page, which
 fills in the page for you, or use the
-[Suggest a docs change](https://github.com/Silo-Server/siloserver.org/issues/new?template=docs.yml) form. Only collaborators open pull requests in
-that repository.
+[Suggest a docs change](https://github.com/Silo-Server/siloserver.org/issues/new?template=docs.yml) form. Contributors don't open pull requests
+in that repository; maintainers make the change from the issue.
 
 ## Prepare a focused change
 
